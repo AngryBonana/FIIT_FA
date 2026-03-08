@@ -21,8 +21,51 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     
     public virtual void Add(TKey key, TValue value)
     {
-        throw new NotImplementedException(
-            "Implement standard BST add logic using <CreateNode(key, value)> and OnNodeAdded(newNode)");
+        if (this.Root is null)
+        {
+            this.Root = CreateNode(key, value);
+            this.Count++;
+            OnNodeAdded(this.Root);
+            return;
+        }
+
+        TNode? current = this.Root;
+        while (current is not null)
+        {
+            int comparison = Comparer.Compare(key, current.Key);
+            
+            if (comparison < 0)
+            {
+                if (current.Left is null)
+                {
+                    current.Left = CreateNode(key, value);
+                    current.Left.Parent = current;
+                    this.Count++;
+                    OnNodeAdded(current.Left);
+                    return;
+                }
+                current = current.Left;
+            }
+
+            else if (comparison > 0)
+            {
+                if (current.Right is null)
+                {
+                    current.Right = CreateNode(key, value);
+                    current.Right.Parent = current;
+                    this.Count++;
+                    OnNodeAdded(current.Right);
+                    return;
+                }
+                current = current.Right;
+            }
+
+            else
+            {
+                current.Value = value;
+                return;
+            }
+        }
     }
 
     
@@ -39,7 +82,12 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     
     protected virtual void RemoveNode(TNode node)
     {
-        throw new NotImplementedException("Implement standard BST delete logic using Transplant helper");
+        if (node.Left is null && node.Right is null)
+        {
+            Transplant(node, null);
+            this.Count--;
+            OnNodeRemoved(node.Parent, null);
+        }
     }
 
     public virtual bool ContainsKey(TKey key) => FindNode(key) != null;
