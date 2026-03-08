@@ -81,12 +81,33 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     
     
     protected virtual void RemoveNode(TNode node)
-    {
-        if (node.Left is null && node.Right is null)
+    {        
+        if (node.Left is null)
         {
-            Transplant(node, null);
-            this.Count--;
-            OnNodeRemoved(node.Parent, null);
+            Transplant(node, node.Right);
+            OnNodeRemoved(node, node.Right);
+        }
+        else if (node.Right is null)
+        {
+            Transplant(node, node.Left);
+            OnNodeRemoved(node, node.Left);
+        }
+        else
+        {
+            TNode replacement = FindMinNode(node.Right);
+            
+            if (replacement.Parent != node)
+            {
+                Transplant(replacement, replacement.Right);
+                replacement.Right = node.Right;
+                replacement.Right.Parent = replacement;
+            }
+            
+            Transplant(node, replacement);
+            replacement.Left = node.Left;
+            replacement.Left.Parent = replacement;
+            
+            OnNodeRemoved(node, replacement);
         }
     }
 
@@ -145,34 +166,98 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
         return null;
     }
 
+    protected TNode FindMinNode(TNode node)
+    {
+        TNode current = node;
+        while (current.Left is not null)
+        {
+            current = current.Left;
+        }
+        return current;
+    }
+
     protected void RotateLeft(TNode x)
     {
-        throw new NotImplementedException();
+        if (x is null || x.Right is null) return;
+
+        TNode y = x.Right;
+
+        x.Right = y.Left;
+        if (y.Left is not null)
+        {
+            y.Left.Parent = x;
+        }
+
+        y.Parent = x.Parent;
+        if (x.Parent is null)
+        {
+            this.Root = y;
+        }
+        else if (x.IsLeftChild)
+        {
+            x.Parent.Left = y;
+        }
+        else
+        {
+            x.Parent.Right = y;
+        }
+
+        y.Left = x;
+        x.Parent = y;
     }
 
     protected void RotateRight(TNode y)
     {
-        throw new NotImplementedException();
+        if (y is null || y.Left is null) return;
+
+        TNode x = y.Left;
+
+        y.Left = x.Right;
+        if (x.Right is not null)
+        {
+            x.Right.Parent = y;
+        }
+
+        x.Parent = y.Parent;
+        if (y.Parent is null)
+        {
+            this.Root = x;
+        }
+        else if (y.IsLeftChild)
+        {
+            y.Parent.Left = x;
+        }
+        else
+        {
+            y.Parent.Right = x;
+        }
+
+        x.Right = y;
+        y.Parent = x;
     }
     
     protected void RotateBigLeft(TNode x)
     {
-        throw new NotImplementedException();
+        RotateRight(x.Right!);
+        RotateLeft(x);
     }
     
     protected void RotateBigRight(TNode y)
     {
-        throw new NotImplementedException();
+        RotateLeft(y.Left!);
+        RotateRight(y);
     }
     
     protected void RotateDoubleLeft(TNode x)
     {
-        throw new NotImplementedException();
+        RotateLeft(x);
+        RotateLeft(x.Parent!);
     }
     
     protected void RotateDoubleRight(TNode y)
     {
-        throw new NotImplementedException();
+        RotateRight(y);
+        RotateRight(y.Parent!);
     }
     
     protected void Transplant(TNode u, TNode? v)
