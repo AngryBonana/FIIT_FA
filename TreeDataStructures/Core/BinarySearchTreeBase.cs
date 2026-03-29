@@ -238,26 +238,38 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     
     protected void RotateBigLeft(TNode x)
     {
-        RotateRight(x.Right!);
+        if (x is null || x.Right is null) return;
+        TNode rightChild = x.Right;
+        RotateRight(rightChild);
         RotateLeft(x);
     }
-    
+
     protected void RotateBigRight(TNode y)
     {
-        RotateLeft(y.Left!);
+        if (y is null || y.Left is null) return;
+        TNode leftChild = y.Left;
+        RotateLeft(leftChild);
         RotateRight(y);
     }
-    
+
     protected void RotateDoubleLeft(TNode x)
     {
+        if (x is null || x.Right is null) return;
         RotateLeft(x);
-        RotateLeft(x.Parent!);
+        if (x.Parent is not null)
+        {
+            RotateLeft(x.Parent);
+        }
     }
-    
+
     protected void RotateDoubleRight(TNode y)
     {
+        if (y is null || y.Left is null) return;
         RotateRight(y);
-        RotateRight(y.Parent!);
+        if (y.Parent is not null)
+        {
+            RotateRight(y.Parent);
+        }
     }
     
     protected void Transplant(TNode u, TNode? v)
@@ -295,7 +307,9 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     {
         private readonly TNode? root;
         private readonly TraversalStrategy strategy;
-        private Stack<(TNode node, int depth)> stack = new();
+        private TNode? currentNode;
+        private TNode? lastVisited;
+        private int currentDepth; 
         private readonly int baseDepth;
 
         private bool started = false;
@@ -337,153 +351,269 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
             throw new NotImplementedException();
         }
 
+
         public bool MoveNextInOrder(bool flipped = false)
         {
             if (!started)
             {
                 started = true;
+                if (root is null)
+                {
+                    finished = true;
+                    return false;
+                }
+                
+                currentNode = root;
+                currentDepth = baseDepth;
                 if (flipped)
-                    PushRightChain(root, baseDepth);
-                else 
-                    PushLeftChain(root, baseDepth);
+                {
+                    while (currentNode.Right is not null)
+                    {
+                        currentNode = currentNode.Right;
+                        currentDepth++;
+                    }
+                }
+                else
+                {
+                    while (currentNode.Left is not null)
+                    {
+                        currentNode = currentNode.Left;
+                        currentDepth++;
+                    }
+                }
+                return YieldCurrent();
             }
 
-            if (stack.Count == 0)
-            {
-                finished = true;
-                return false;
-            }
+            if (finished || currentNode is null) return false;
 
-            (TNode node, int depth) = stack.Pop();
-            current = new(node.Key, node.Value, depth);
-
+            TNode? next;
             if (flipped)
-            {    
-                if (node.Left is not null) PushRightChain(node.Left, depth);
+            {
+                // Reverse in-order: Right -> Node -> Left
+                if (currentNode.Left is not null)
+                {
+                    next = currentNode.Left;
+                    currentDepth++;
+                    while (next.Right is not null)
+                    {
+                        next = next.Right;
+                        currentDepth++;
+                    }
+                    currentNode = next;
+                    return YieldCurrent();
+                }
+                
+                while (currentNode.Parent is not null && currentNode.IsLeftChild)
+                {
+                    currentNode = currentNode.Parent;
+                    currentDepth--;
+                }
+                
+                if (currentNode.Parent is null)
+                {
+                    finished = true;
+                    return false;
+                }
+                
+                currentNode = currentNode.Parent;
+                currentDepth--;
             }
             else
             {
-                if (node.Right is not null) PushLeftChain(node.Right, depth);
+                // Standard in-order: Left -> Node -> Right
+                if (currentNode.Right is not null)
+                {
+                    next = currentNode.Right;
+                    currentDepth++;
+                    while (next.Left is not null)
+                    {
+                        next = next.Left;
+                        currentDepth++;
+                    }
+                    currentNode = next;
+                    return YieldCurrent();
+                }
+                
+                // Поднимаемся вверх, пока мы не левый ребёнок
+                while (currentNode.Parent is not null && currentNode.IsRightChild)
+                {
+                    currentNode = currentNode.Parent;
+                    currentDepth--;
+                }
+                
+                if (currentNode.Parent is null)
+                {
+                    finished = true;
+                    return false;
+                }
+                
+                currentNode = currentNode.Parent;
+                currentDepth--;
             }
-            return true;
+            
+            return currentNode is not null && YieldCurrent();
         }
-
-        public void PushLeftChain(TNode? node, int depth)
-        {
-            while (node is not null)
-            {
-                stack.Push((node, depth));
-                node = node.Left;
-                depth++;
-            }
-        }
-
-        public void PushRightChain(TNode? node, int depth)
-        {
-            while (node is not null)
-            {
-                stack.Push((node, depth));
-                node = node.Right;
-                depth++;
-            }
-        }
+        
 
         public bool MoveNextPreOrder(bool flipped = false)
         {
             if (!started)
             {
                 started = true;
-                if (root is not null) stack.Push((root, baseDepth));
+                if (root is null) { finished = true; return false; }
+                currentNode = root;
+                currentDepth = baseDepth;
+                return YieldCurrent();
             }
 
-            if (stack.Count == 0)
-            {
-                finished = true;
-                return false;
-            }
+            if (finished || currentNode is null) return false;
 
-            (TNode node, int depth) = stack.Pop();
-            current = new(node.Key, node.Value, depth);
+            TNode? firstChild = flipped ? currentNode.Right : currentNode.Left;
+            TNode? secondChild = flipped ? currentNode.Left : currentNode.Right;
             
-            if (flipped)
+            if (firstChild is not null)
             {
-                if (node.Left is not null) stack.Push((node.Left, depth + 1));
-                if (node.Right is not null) stack.Push((node.Right, depth + 1));
+                currentNode = firstChild;
+                currentDepth++;
+                return YieldCurrent();
             }
-            else
+            
+            if (secondChild is not null)
             {
-                if (node.Right is not null) stack.Push((node.Right, depth + 1));
-                if (node.Left is not null) stack.Push((node.Left, depth + 1));
+                currentNode = secondChild;
+                currentDepth++;
+                return YieldCurrent();
             }
-
-            return true;
+            
+            // Поднимаемся вверх, ища узел, у которого есть непосещенный ВТОРОЙ ребенок
+            while (currentNode?.Parent is not null)
+            {
+                TNode parent = currentNode.Parent;
+                // Пересчитываем детей родителя
+                TNode? pFirst = flipped ? parent.Right : parent.Left;
+                TNode? pSecond = flipped ? parent.Left : parent.Right;
+                
+                // Если мы пришли от первого ребенка и есть второй — идем во второй
+                if (currentNode == pFirst && pSecond is not null)
+                {
+                    currentNode = pSecond;
+                    currentDepth++;
+                    return YieldCurrent();
+                }
+                
+                // Иначе продолжаем подъем
+                currentNode = parent;
+                currentDepth--;
+            }
+            
+            finished = true;
+            return false;
         }
-        
+
 
         public bool MoveNextPostOrder(bool flipped = false)
         {
             if (!started)
             {
                 started = true;
-                if (flipped)
+                if (root is null) { finished = true; return false; }
+                
+                // Идём к самому "глубокому левому" узлу
+                currentNode = root;
+                currentDepth = baseDepth;
+                while (true)
                 {
-                    if (root is not null) PushRightLeftChain(root, baseDepth);
+                    TNode? first = flipped ? currentNode.Right : currentNode.Left;
+                    TNode? second = flipped ? currentNode.Left : currentNode.Right;
+                    
+                    if (first is not null)
+                    {
+                        currentNode = first;
+                        currentDepth++;
+                    }
+                    else if (second is not null)
+                    {
+                        currentNode = second;
+                        currentDepth++;
+                    }
+                    else break;
                 }
-                else
-                {
-                    if (root is not null) PushLeftRightChain(root, baseDepth);
-                }
+                lastVisited = null;
+                return YieldCurrentWithMark();
             }
 
-            if (stack.Count == 0)
+            if (finished || currentNode is null) return false;
+
+            while (currentNode?.Parent is not null)
             {
-                finished = true;
-                return false;
+                TNode parent = currentNode.Parent;
+                TNode? firstChild = flipped ? parent.Right : parent.Left;
+                TNode? secondChild = flipped ? parent.Left : parent.Right;
+                
+                // Если пришли от первого ребёнка — пробуем второго
+                if (currentNode == firstChild && secondChild is not null && secondChild != lastVisited)
+                {
+                    // Спускаемся во второго ребёнка и дальше вглубь
+                    currentNode = secondChild;
+                    currentDepth++;
+                    while (true)
+                    {
+                        TNode? f = flipped ? currentNode.Right : currentNode.Left;
+                        TNode? s = flipped ? currentNode.Left : currentNode.Right;
+                        if (f is not null)
+                        {
+                            currentNode = f;
+                            currentDepth++;
+                        }
+                        else if (s is not null)
+                        {
+                            currentNode = s;
+                            currentDepth++;
+                        }
+                        else break;
+                    }
+                    return YieldCurrentWithMark();
+                }
+                
+                // Оба ребёнка обработаны — возвращаем родителя
+                currentNode = parent;
+                currentDepth--;
+                return YieldCurrentWithMark();
             }
             
-            (TNode node, int depth) = stack.Pop();
-            current = new(node.Key, node.Value, depth);
+            finished = true;
+            return false;
+        }
 
-            if (flipped)
-            {
-                if (node.Parent is not null && node.IsRightChild) PushRightLeftChain(node.Parent.Left, depth);
-            }
-            else
-            {
-                if (node.Parent is not null && node.IsLeftChild) PushLeftRightChain(node.Parent.Right, depth);
-            }
-
+        private bool YieldCurrentWithMark()
+        {
+            if (currentNode is null) return false;
+            current = new TreeEntry<TKey, TValue>(currentNode.Key, currentNode.Value, currentDepth);
+            lastVisited = currentNode; // Помечаем как посещённый для post-order
             return true;
-            
         }
 
-        public void PushLeftRightChain(TNode? node, int depth)
+        private bool YieldCurrent()
         {
-            while (node is not null)
-            {
-                stack.Push((node, depth));
-                if (node.Left is not null) node = node.Left;
-                else if (node.Right is not null) node = node.Right;
-                else node = null;
-                depth++;
-            }
+            if (currentNode is null) return false;
+            current = new TreeEntry<TKey, TValue>(currentNode.Key, currentNode.Value, currentDepth);
+            return true;
         }
-
-        public void PushRightLeftChain(TNode? node, int depth)
+        private static int CalculateDepth(TNode? node, int baseDepth = 0)
         {
-             while (node is not null)
+            int depth = baseDepth;
+            while (node?.Parent is not null)
             {
-                stack.Push((node, depth));
-                if (node.Right is not null) node = node.Right;
-                else if (node.Left is not null) node = node.Left;
-                else node = null;
                 depth++;
+                node = node.Parent;
             }
+            return depth;
         }
-
         public void Reset()
         {
-            stack.Clear();
+            currentNode = null;
+            lastVisited = null;
+            currentDepth = baseDepth;
             started = false;
             finished = false;
             current = default;
@@ -492,8 +622,10 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
         
         public void Dispose()
         {
-            stack.Clear();
+            currentNode = null;
+            lastVisited = null;
             finished = true;
+            started = false;
             current = default;
         }
     }
