@@ -341,11 +341,11 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
                 case TraversalStrategy.PostOrder:
                     return MoveNextPostOrder();
                 case TraversalStrategy.PreOrderReverse:
-                    return MoveNextPostOrder(flipped: true);
+                    return MoveNextPreOrder(flipped: true);
                 case TraversalStrategy.InOrderReverse:
                     return MoveNextInOrder(flipped: true);
                 case TraversalStrategy.PostOrderReverse:
-                    return MoveNextPreOrder(flipped: true);
+                    return MoveNextPostOrder(flipped: true);
             }
             
             throw new NotImplementedException();
