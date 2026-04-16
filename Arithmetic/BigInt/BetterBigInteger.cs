@@ -1,4 +1,5 @@
-﻿using Arithmetic.BigInt.Interfaces;
+﻿using System.ComponentModel.DataAnnotations;
+using Arithmetic.BigInt.Interfaces;
 using Arithmetic.BigInt.MultiplyStrategy;
 
 namespace Arithmetic.BigInt;
@@ -215,7 +216,7 @@ public sealed class BetterBigInteger : IBigInteger
     
     #endregion
 
-    #region Binary operations
+    #region Bitwise operations
 
     public static BetterBigInteger operator ~(BetterBigInteger a)
     {
@@ -223,9 +224,107 @@ public sealed class BetterBigInteger : IBigInteger
         return -(a + new BetterBigInteger([1u], false));
     }
 
-    public static BetterBigInteger operator &(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
-    public static BetterBigInteger operator |(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
-    public static BetterBigInteger operator ^(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
+    public static BetterBigInteger operator &(BetterBigInteger a, BetterBigInteger b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+
+        bool aNeg = a.IsNegative, bNeg = b.IsNegative;
+        var aDig = a.GetDigits();
+        var bDig = b.GetDigits();
+        
+        int len = Math.Max(aDig.Length, bDig.Length) + 1;
+        
+        uint[] aBits = ToTwosComplement(aDig, aNeg, len);
+        uint[] bBits = ToTwosComplement(bDig, bNeg, len);
+
+        uint[] res = new uint[len];
+        for (int i = 0; i < len; i++) res[i] = aBits[i] & bBits[i];
+
+        bool resNeg = aNeg && bNeg;
+
+        if (resNeg)
+        {
+            for (int i = 0; i < len; i++) res[i] = ~res[i];
+            uint carry = 1;
+            for (int i = 0; i < len && carry != 0; i++)
+            {
+                uint sum = res[i] + carry;
+                carry = (sum < res[i]) ? 1u : 0u;
+                res[i] = sum;
+            }
+        }
+
+        return new BetterBigInteger(res, resNeg);
+    }
+
+    public static BetterBigInteger operator |(BetterBigInteger a, BetterBigInteger b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+
+        bool aNeg = a.IsNegative, bNeg = b.IsNegative;
+        var aDigits = a.GetDigits();
+        var bDigits = b.GetDigits();
+        
+        int len = Math.Max(aDigits.Length, bDigits.Length) + 1;
+        uint[] res = new uint[len];
+
+        uint[] aBits = ToTwosComplement(aDigits, aNeg, len);
+        uint[] bBits = ToTwosComplement(bDigits, bNeg, len);
+
+        for (int i = 0; i < len; i++) res[i] = aBits[i] | bBits[i];
+
+        bool resNeg = aNeg || bNeg;
+
+        if (resNeg)
+        {
+            for (int i = 0; i < len; i++) res[i] = ~res[i];
+            uint carry = 1;
+            for (int i = 0; i < len && carry != 0; i++)
+            {
+                uint sum = res[i] + carry;
+                carry = (sum < res[i]) ? 1u : 0u;
+                res[i] = sum;
+            }
+        }
+
+        return new BetterBigInteger(res, resNeg);
+    }
+
+    public static BetterBigInteger operator ^(BetterBigInteger a, BetterBigInteger b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+
+        bool aNeg = a.IsNegative, bNeg = b.IsNegative;
+        var aDigits = a.GetDigits();
+        var bDigits = b.GetDigits();
+        
+        int len = Math.Max(aDigits.Length, bDigits.Length) + 1;
+        uint[] res = new uint[len];
+
+        uint[] aBits = ToTwosComplement(aDigits, aNeg, len);
+        uint[] bBits = ToTwosComplement(bDigits, bNeg, len);
+
+        for (int i = 0; i < len; i++) res[i] = aBits[i] ^ bBits[i];
+
+        bool resNeg = aNeg != bNeg;
+
+        if (resNeg)
+        {
+            for (int i = 0; i < len; i++) res[i] = ~res[i];
+            uint carry = 1;
+            for (int i = 0; i < len && carry != 0; i++)
+            {
+                uint sum = res[i] + carry;
+                carry = (sum < res[i]) ? 1u : 0u;
+                res[i] = sum;
+            }
+        }
+
+        return new BetterBigInteger(res, resNeg);
+    }
     
     public static BetterBigInteger operator <<(BetterBigInteger a, int shift)
     {
@@ -464,6 +563,29 @@ public sealed class BetterBigInteger : IBigInteger
         ans[ans.Length - 1] = carry;
         return ans;
     }
-    
+
+    private static uint[] ToTwosComplement(ReadOnlySpan<uint> mag, bool isNeg, int len)
+    {
+        uint[] bits = new uint[len];
+        uint carry = isNeg ? 1u : 0u; 
+
+        for (int i = 0; i < len; i++)
+        {
+            uint m = i < mag.Length ? mag[i] : 0;
+            if (isNeg)
+            {
+                uint inv = ~m;
+                uint sum = inv + carry;
+                carry = (sum < inv) ? 1u : 0u; 
+                bits[i] = sum;
+            }
+            else
+            {
+                bits[i] = m;
+            }
+        }
+        return bits;
+    }
+
     #endregion
 }
