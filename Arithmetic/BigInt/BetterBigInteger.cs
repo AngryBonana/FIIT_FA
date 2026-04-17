@@ -272,65 +272,7 @@ public sealed class BetterBigInteger : IBigInteger
 
     public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b)
     {
-        ArgumentNullException.ThrowIfNull(a);
-        ArgumentNullException.ThrowIfNull(b);
-        if (b._data is null && b._smallValue == 0) throw new DivideByZeroException();
-
-        var aDigits = a.GetDigits();
-        var bDigits = b.GetDigits();
-        if (AbsCompare(aDigits, bDigits) < 0) return new([0u], false);
-
-        bool isNeg = a.IsNegative != b.IsNegative;
-
-        
-        int shift = 0;
-        uint last = bDigits[bDigits.Length - 1];
-        while (last < 0x80000000)
-        {
-            last <<= 1;
-            ++shift;
-        }
-
-        var newA = (a.IsNegative ? -a : a) << shift;
-        var newB = (b.IsNegative ? -b : b) << shift;
-
-        var rawADigits = newA.GetDigits().ToArray();
-        var newADigits = new uint[rawADigits.Length + 1];
-        rawADigits.CopyTo(newADigits, 0);
-        var newBDigits = newB.GetDigits().ToArray();
-
-        int divisorLen = newBDigits.Length;
-        int quotientLen = newADigits.Length - divisorLen; 
-        uint[] quotient = new uint[quotientLen];
-
-        for (int i = quotientLen - 1; i >= 0; --i)
-        {
-            int highIdx = i + divisorLen;
-            uint u2 = newADigits[highIdx] >> 16;
-            uint u1 = newADigits[highIdx - 1] >> 16;
-            uint numerator = (u2 << 16) | u1;
-
-            uint v1 = newBDigits[divisorLen - 1] >> 16;
-            uint qHat = numerator / v1;
-
-            int corrections = 0;
-            while (true)
-            {
-                var prod = MultiplyByScalar(newBDigits, qHat);
-                if (CompareWindows(newADigits, i, prod) <= 0) break;
-                qHat--;
-                if (qHat == 0 || ++corrections > 2) break;
-            }
-
-            var product = MultiplyByScalar(newBDigits, qHat);
-            SubtractInPlace(newADigits, i, product);
-
-            quotient[i] = qHat;
-        }
-
-        var remainder = new BetterBigInteger(newADigits, a.IsNegative) >> shift;
-        return remainder;
-
+        throw new NotImplementedException();
     }
     
     
