@@ -280,7 +280,19 @@ public sealed class BetterBigInteger : IBigInteger
     {
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
-        return new SimpleMultiplier().Multiply(a, b);
+
+        if (a._data is null && a._smallValue == 0) return new([0u], false);
+        if (b._data is null && b._smallValue == 0) return new([0u], false);
+
+        int maxLen = Math.Max(a.GetDigits().Length, b.GetDigits().Length); 
+        IMultiplier multiplier = maxLen switch
+        {
+            < 32 => new SimpleMultiplier(),
+            < 512 => new KaratsubaMultiplier(),
+            _ => new FftMultiplier()
+        };
+
+        return multiplier.Multiply(a, b);
     }
     
     #endregion
@@ -693,7 +705,6 @@ public sealed class BetterBigInteger : IBigInteger
 
     private static int CompareWindows(uint[] dividend, int offset, uint[] product)
     {
-        // Сравниваем от старших разрядов
         for (int i = product.Length - 1; i >= 0; i--)
         {
             uint d = (offset + i < dividend.Length) ? dividend[offset + i] : 0;

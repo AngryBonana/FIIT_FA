@@ -27,19 +27,19 @@ internal class FftMultiplier : IMultiplier
             bComp[i] = i < chunksB.Length ? chunksB[i] : 0;
         }
 
-        Complex[] A = FFT(aComp, false);
-        Complex[] B = FFT(bComp, false);
+        FFT(aComp, false);
+        FFT(bComp, false);
 
-        Complex[] C = new Complex[Math.Max(A.Length, B.Length)];
-        for (int i = 0; i < C.Length; ++i)
+        Complex[] c = new Complex[Math.Max(aComp.Length, bComp.Length)];
+        for (int i = 0; i < c.Length; ++i)
         {
-            var val1 = i < A.Length ? A[i] : 0;
-            var val2 = i < B.Length ? B[i] : 0;
-            C[i] = val1 * val2;
+            var val1 = i < aComp.Length ? aComp[i] : 0;
+            var val2 = i < bComp.Length ? bComp[i] : 0;
+            c[i] = val1 * val2;
         }
 
-        Complex[] resultComplex = FFT(C, true);
-        double[] coefs = resultComplex.Select(x => x.Real).ToArray();
+        FFT(c, true);
+        double[] coefs = c.Select(x => x.Real).ToArray();
         PropagateCarries(coefs);
         var res = FromChunks(coefs);
 
@@ -106,8 +106,62 @@ internal class FftMultiplier : IMultiplier
         }
     }
 
-    private static Complex [] FFT(Complex[] data, bool invert=false)
+    private static void FFT(Complex[] data, bool invert=false)
     {
+        int n = data.Length;
+        if (n <= 1) return;
+
+        int logN = 0;
+        while ((1 << logN) < n) logN++;
         
+        for (int i = 0; i < n; i++)
+        {
+            int rev = ReverseBits(i, logN);
+            if (i < rev)
+            {
+                var temp = data[i];
+                data[i] = data[rev];
+                data[rev] = temp;
+            }
+        }
+
+        for (int s = 0; s < logN; s++)
+        {
+            int m = 1 << s;
+            int len = 2 * m;
+            
+            double angle = (invert ? 1 : -1) * Math.PI / m;
+            
+            for (int k = 0; k < m; k++)
+            {
+                Complex w = Complex.FromPolarCoordinates(1.0, k * angle);
+                
+                for (int j = 0; j < n; j += len)
+                {
+                    Complex u = data[j + k];
+                    Complex t = w * data[j + k + m];
+                    
+                    data[j + k] = u + t;
+                    data[j + k + m] = u - t;
+                }
+            }
+        }
+
+        if (invert)
+        {
+            for (int i = 0; i < n; i++)
+                data[i] /= n;
+        }
+    }
+
+    private static int ReverseBits(int i, int logN)
+    {
+        int rev = 0;
+        for (int b = 0; b < logN; b++)
+        {
+            rev = (rev << 1) | (i & 1);
+            i >>= 1;
+        }
+        return rev;
     }
 }
