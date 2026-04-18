@@ -213,66 +213,18 @@ public sealed class BetterBigInteger : IBigInteger
         ArgumentNullException.ThrowIfNull(b);
         if (b._data is null && b._smallValue == 0) throw new DivideByZeroException();
 
-        var aDigits = a.GetDigits();
-        var bDigits = b.GetDigits();
-        if (AbsCompare(aDigits, bDigits) < 0) return new([0u], false);
-
-        bool isNeg = a.IsNegative != b.IsNegative;
-
-        
-        int shift = 0;
-        uint last = bDigits[bDigits.Length - 1];
-        while (last < 0x80000000)
-        {
-            last <<= 1;
-            ++shift;
-        }
-
-        var newA = (a.IsNegative ? -a : a) << shift;
-        var newB = (b.IsNegative ? -b : b) << shift;
-
-        var rawADigits = newA.GetDigits().ToArray();
-        var newADigits = new uint[rawADigits.Length + 1];
-        rawADigits.CopyTo(newADigits, 0);
-        var newBDigits = newB.GetDigits().ToArray();
-
-        int divisorLen = newBDigits.Length;
-        int quotientLen = newADigits.Length - divisorLen; 
-        uint[] quotient = new uint[quotientLen];
-
-        for (int i = quotientLen - 1; i >= 0; --i)
-        {
-            int highIdx = i + divisorLen;
-            uint u2 = newADigits[highIdx] >> 16;
-            uint u1 = newADigits[highIdx - 1] >> 16;
-            uint numerator = (u2 << 16) | u1;
-
-            uint v1 = newBDigits[divisorLen - 1] >> 16;
-            uint qHat = numerator / v1;
-
-            int corrections = 0;
-            while (true)
-            {
-                var prod = MultiplyByScalar(newBDigits, qHat);
-                if (CompareWindows(newADigits, i, prod) <= 0) break;
-                qHat--;
-                if (qHat == 0 || ++corrections > 2) break;
-            }
-
-            var product = MultiplyByScalar(newBDigits, qHat);
-            SubtractInPlace(newADigits, i, product);
-
-            quotient[i] = qHat;
-        }
-
-        return new(quotient, isNeg);
+        return GetQuotientOrRemainder(a, b, false);
 
     }
 
 
     public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b)
     {
-        throw new NotImplementedException();
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+        if (b._data is null && b._smallValue == 0) throw new DivideByZeroException();
+
+        return GetQuotientOrRemainder(a, b, false);
     }
     
     
@@ -682,55 +634,12 @@ public sealed class BetterBigInteger : IBigInteger
         return 0;
     }
 
-    private static uint[] MultiplyByScalar(uint[] digits, uint scalar)
+
+    private static BetterBigInteger GetQuotientOrRemainder(BetterBigInteger a, BetterBigInteger b, bool needRemainder)
     {
-        if (scalar == 0) return new uint[] { 0 };
-        if (scalar == 1) return (uint[])digits.Clone();
-        
-        uint[] res = new uint[digits.Length + 1];
-        ulong carry = 0;
-        for (int i = 0; i < digits.Length; i++)
-        {
-            carry += (ulong)digits[i] * scalar;
-            res[i] = (uint)carry;
-            carry >>= 32;
-        }
-        res[digits.Length] = (uint)carry;
-        
-        int len = res.Length;
-        while (len > 1 && res[len - 1] == 0) len--;
-        if (len < res.Length) Array.Resize(ref res, len);
-        return res;
+        throw new NotImplementedException();
     }
 
-    private static int CompareWindows(uint[] dividend, int offset, uint[] product)
-    {
-        for (int i = product.Length - 1; i >= 0; i--)
-        {
-            uint d = (offset + i < dividend.Length) ? dividend[offset + i] : 0;
-            uint p = product[i];
-            if (d < p) return -1;
-            if (d > p) return 1;
-        }
-        return 0;
-    }
-
-    private static void SubtractInPlace(uint[] dividend, int offset, uint[] product)
-    {
-        uint borrow = 0;
-        for (int j = 0; j < product.Length; j++)
-        {
-            int idx = offset + j;
-            
-            if (idx >= dividend.Length) continue;
-
-            uint d = dividend[idx];
-            uint sub = product[j] + borrow;
-            uint result = d - sub;
-            borrow = (sub > d) ? 1u : 0u;
-            dividend[idx] = result;
-        }
-    }
 
     #endregion
 }
