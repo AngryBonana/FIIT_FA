@@ -213,19 +213,12 @@ public sealed class BetterBigInteger : IBigInteger
         ArgumentNullException.ThrowIfNull(b);
         if (b._data is null && b._smallValue == 0) throw new DivideByZeroException();
 
-        return GetQuotientOrRemainder(a, b, false);
+        return GetQuotientOrRemainder(a, b);
 
     }
 
 
-    public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b)
-    {
-        ArgumentNullException.ThrowIfNull(a);
-        ArgumentNullException.ThrowIfNull(b);
-        if (b._data is null && b._smallValue == 0) throw new DivideByZeroException();
-
-        return GetQuotientOrRemainder(a, b, false);
-    }
+    public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b) => a - (a / b) * b;
     
     
     public static BetterBigInteger operator *(BetterBigInteger a, BetterBigInteger b)
@@ -549,31 +542,6 @@ public sealed class BetterBigInteger : IBigInteger
         
     }
 
-    private static uint[] SubtractArrays (ReadOnlySpan<uint> more, ReadOnlySpan<uint> less)
-    {
-        uint[] ans = new uint[more.Length];
-        uint borrow = 0;
-
-        for (int i = 0; i < more.Length; i++)
-        {
-            uint l = (i < less.Length) ? less[i] : 0;
-
-            uint val = more[i] - borrow;
-            
-            bool borrowedFromThis = borrow > more[i];
-            
-            uint diff = val - l;
-            
-            bool borrowedForL = val < l;
-
-            ans[i] = diff;
-
-            borrow = (borrowedFromThis || borrowedForL) ? 1u : 0u;
-        }
-        
-        return ans;
-    }
-
     private static uint[] AddArrays (ReadOnlySpan<uint> first, ReadOnlySpan<uint> second)
     {
         uint[] ans = new uint[((first.Length > second.Length) ? first.Length : second.Length) + 1];
@@ -620,6 +588,31 @@ public sealed class BetterBigInteger : IBigInteger
         return bits;
     }
 
+    private static uint[] SubtractArrays (ReadOnlySpan<uint> more, ReadOnlySpan<uint> less)
+    {
+        uint[] ans = new uint[more.Length];
+        uint borrow = 0;
+
+        for (int i = 0; i < more.Length; i++)
+        {
+            uint l = (i < less.Length) ? less[i] : 0;
+
+            uint val = more[i] - borrow;
+            
+            bool borrowedFromThis = borrow > more[i];
+            
+            uint diff = val - l;
+            
+            bool borrowedForL = val < l;
+
+            ans[i] = diff;
+
+            borrow = (borrowedFromThis || borrowedForL) ? 1u : 0u;
+        }
+        
+        return ans;
+    }
+
     private static int AbsCompare(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
     {
         if (a.Length > b.Length) return 1;
@@ -634,10 +627,179 @@ public sealed class BetterBigInteger : IBigInteger
         return 0;
     }
 
-
-    private static BetterBigInteger GetQuotientOrRemainder(BetterBigInteger a, BetterBigInteger b, bool needRemainder)
+    private static int AbsCompare(uint[] a, uint[] b)
     {
-        throw new NotImplementedException();
+        if (a.Length > b.Length) return 1;
+        if (a.Length < b.Length) return -1;
+
+        for (int i = a.Length - 1; i >= 0; --i)
+        {
+            if (a[i] < b[i]) return -1;
+            if (a[i] > b[i]) return 1;
+        }
+
+        return 0;
+    }
+
+
+    private static BetterBigInteger GetQuotientOrRemainder(BetterBigInteger a, BetterBigInteger b)
+    {
+        if (a._data is null && a._smallValue == 0) return new([0]);
+        
+        int cmp = AbsCompare(a.GetDigits(), b.GetDigits());
+        if (cmp < 0) 
+        { 
+            return new([0]);
+        }
+        if (cmp == 0)
+        {
+            return new([1], a.IsNegative != b.IsNegative);
+        }
+        
+        bool aSign = a.IsNegative;
+        bool bSign = b.IsNegative;
+        
+        uint[] aDigits = a.GetDigits().ToArray();
+        uint[] bDigits = b.GetDigits().ToArray();
+        
+        Trim(ref aDigits);
+        Trim(ref bDigits);
+        
+        int quotientLength = aDigits.Length - bDigits.Length + 1;
+        uint[] quotient = new uint[quotientLength];
+        
+        uint[] remainder = new uint[bDigits.Length];
+        Array.Copy(aDigits, aDigits.Length - bDigits.Length, remainder, 0, bDigits.Length);
+        Trim(ref remainder);
+        
+        int currentPos = aDigits.Length - bDigits.Length - 1;
+        
+        for (int i = quotientLength - 1; i >= 0; i--)
+        {
+            uint q = 0;
+            
+            if (AbsCompare(remainder, bDigits) >= 0)
+            {
+                uint minQ = 1;
+                uint maxQ = uint.MaxValue;
+                
+                while (minQ <= maxQ)
+                {
+                    uint midQ = minQ + (maxQ - minQ) / 2;
+                    uint[] product = MultiplyBySingleDigit(bDigits, midQ);
+                    
+                    int cmpResult = AbsCompare(remainder, product);
+                    if (cmpResult >= 0)
+                    {
+                        q = midQ;
+                        minQ = midQ + 1;
+                    }
+                    else
+                    {
+                        maxQ = midQ - 1;
+                    }
+                }
+            }
+            
+            quotient[i] = q;
+            
+            if (q > 0)
+            {
+                uint[] product = MultiplyBySingleDigit(bDigits, q);
+                remainder = SubtractArrays(remainder, product);
+                Trim(ref remainder);
+            }
+            
+            if (currentPos >= 0)
+            {
+                uint[] newRemainder = new uint[remainder.Length + 1];
+                newRemainder[0] = aDigits[currentPos];
+                Array.Copy(remainder, 0, newRemainder, 1, remainder.Length);
+                remainder = newRemainder;
+                Trim(ref remainder);
+                currentPos--;
+            }
+            else if (i > 0)
+            {
+                uint[] newRemainder = new uint[remainder.Length + 1];
+                newRemainder[0] = 0;
+                Array.Copy(remainder, 0, newRemainder, 1, remainder.Length);
+                remainder = newRemainder;
+                Trim(ref remainder);
+            }
+        }
+        
+        Trim(ref quotient);
+        Trim(ref remainder);
+        
+       
+        bool quotientSign = aSign != bSign;
+        if (quotient.Length == 1 && quotient[0] == 0)
+            quotientSign = false;
+        return new BetterBigInteger(quotient, quotientSign);
+    }
+
+    private static uint[] TrimArray(uint[] arr)
+    {
+        int newLen = arr.Length;
+        while (newLen > 1 && arr[newLen - 1] == 0)
+            newLen--;
+        
+        if (newLen == arr.Length) return arr;
+        
+        uint[] trimmed = new uint[newLen];
+        Array.Copy(arr, 0, trimmed, 0, newLen);
+        return trimmed;
+    }
+
+    private static void Trim(ref uint[] a)
+    {
+        int newLen = a.Length;
+        while (newLen > 1 && a[newLen - 1] == 0)
+            newLen--;
+        
+        if (newLen != a.Length)
+            Array.Resize(ref a, newLen);
+    }
+
+    private static uint[] MultiplyBySingleDigit(uint[] arr, uint digit)
+    {
+        if (digit == 0) return new uint[] { 0 };
+        
+        uint[] result = new uint[arr.Length + 1];
+        uint carry = 0;
+        
+        for (int i = 0; i < arr.Length; i++)
+        {
+            uint aLow = arr[i] & 0xFFFF;
+            uint aHigh = arr[i] >> 16;
+            uint bLow = digit & 0xFFFF;
+            uint bHigh = digit >> 16;
+            
+            uint lowLow = aLow * bLow;
+            uint lowHigh = aLow * bHigh;
+            uint highLow = aHigh * bLow;
+            uint highHigh = aHigh * bHigh;
+            
+            uint sum = lowLow + (lowHigh << 16);
+            bool carry1 = sum < lowLow;
+            
+            sum += (highLow << 16);
+            bool carry2 = sum < (highLow << 16);
+            
+            sum += carry;
+            bool carry3 = sum < carry;
+            
+            result[i] = sum;
+            
+            carry = highHigh + (lowHigh >> 16) + (highLow >> 16);
+            if (carry1) carry++;
+            if (carry2) carry++;
+            if (carry3) carry++;
+        }
+        
+        result[arr.Length] = carry;
+        return TrimArray(result);
     }
 
 
