@@ -17,7 +17,7 @@ internal class KaratsubaMultiplier : IMultiplier
     private static uint[] MultiplyArrays(uint[] a, uint[] b)
     {
         int maxLen = Math.Max(a.Length, b.Length);
-        if (maxLen < 16) return SimpleMultiply(a, b);
+        if (maxLen < 8) return SimpleMultiply(a, b);
         
         int m = maxLen / 2;
         int highLen = maxLen - m;
