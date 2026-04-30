@@ -37,3 +37,6 @@ stopwatch3.Stop();
 
 t3 = stopwatch3.Elapsed;
 Console.WriteLine("FFT {0}", t3);
+
+Console.WriteLine(a0 == a1);
+Console.WriteLine(a0 == a2);
